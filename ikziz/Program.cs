@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -8,6 +8,9 @@ namespace ikziz
 {
     class Program
     {
+
+        static HashSet<String> UrlsParsed = new HashSet<String>();
+
         static void Main(string[] args)
         {
             string source = "";
@@ -36,73 +39,8 @@ namespace ikziz
             }
 
             ParseSite(source, destination);
-
-
-
-            /*
-            string[] fileEntries = Directory.GetFiles(source);
-            string fileDirectory, fileName, basename;
-            Regex regFileName = new Regex("( |_){1,}", RegexOptions.Multiline);
-            Regex regFileExtension = new Regex(@"\.[a-z0-9]{2,4}$", RegexOptions.IgnoreCase);
-            foreach (string file in fileEntries)
-            {
-                basename = Path.GetFileName(file);
-                basename = regFileName.Replace(basename, ".");
-                basename = regFileExtension.Replace(basename, "");
-
-                fileDirectory = source + @"\" + basename;
-                fileName = fileDirectory + @"\" + Path.GetFileName(file);
-                if (!Directory.Exists(basename))
-                {
-                    try
-                    {
-                        Directory.CreateDirectory(fileDirectory);
-                        Console.WriteLine("\t(CD)\t" + basename);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("\t(Error CD)\t" + basename + " (" + e.Message + ")");
-                    }
-                }
-                if (!File.Exists(fileName))
-                {
-                    try
-                    {
-                        File.Move(file, fileName);
-                        Console.WriteLine("\t(MF)\t" + fileName);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("\t(Error MF)\t" + fileName + " (" + e.Message + ")");
-                    }
-                }
-            }
-
-            // Rename directory .
-            string[] directoryEntries = Directory.GetDirectories(source, "*");
-            Regex regDirectory = new Regex(@"\.", RegexOptions.IgnoreCase);
-            Regex regYearDirectory = new Regex(@" ([0-9]{4})$", RegexOptions.IgnoreCase);
-            foreach (string dir in directoryEntries)
-            {
-                string newName = regDirectory.Replace(dir, " ");
-                newName = newName.Trim();
-                newName = regYearDirectory.Replace(newName, " ($1)");
-                if (dir != newName)
-                {
-                    try
-                    {
-                        Directory.Move(dir, newName);
-                        Console.WriteLine("\t(RD)\t" + newName);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("\t(Error RD)\t" + newName + " (" + e.Message + ")");
-                    }
-                }
-            }
-            */
-
-            Console.WriteLine("Terminé...");
+            
+            Console.WriteLine("\n\n....:::::::::::::Terminé:::::::::::::....");
             Console.Read();
         }
 
@@ -120,21 +58,31 @@ namespace ikziz
             }
         }
 
-        static List<String> ParseSite(String url, String destination)
+        static void ParseSite(String url, String destination)
         {
+
+            if(UrlsParsed.Contains(url))
+            {
+                return;
+            }
+            Console.WriteLine("\n-----------------\nReading " + url);
+
+            UrlsParsed.Add(url);
             List<string> urls = new List<string>();
-            List<string> images = new List<string>();
+            List<string[]> images = new List<string[]>();
 
             string content = GetFromUrl(url);
 
             string[] directory = url.Split('/');
-            string title = directory[directory.Length - 1];
+            string title = directory[directory.Length - 1].Split('?')[0].Split('#')[0];
             string author = directory[directory.Length - 2];
+            string baseUrl = directory[0] + "//" + directory[2];
 
             // Get all other link
-            Regex regUrls = new Regex(@"<a href=""([^""]{1,})""", RegexOptions.IgnoreCase);
+            Regex regUrls = new Regex(@" href=""([^""]{1,})""", RegexOptions.IgnoreCase);
             Regex regLarges = new Regex(@"/large/", RegexOptions.IgnoreCase);
             Regex regUrl = new Regex(@"^/.{1,}", RegexOptions.IgnoreCase);
+            Regex regHttp = new Regex(@"^/http", RegexOptions.IgnoreCase);
 
             Match m = regUrls.Match(content);
             int countImg = 1;
@@ -161,35 +109,51 @@ namespace ikziz
 
                             if (!File.Exists(destination + "/" + author + "/" + title + "/img_" + countImg + ".jpg"))
                             {
-                                Console.WriteLine(link);
-                                Console.WriteLine("");
-
-                                WebClient webClient = new WebClient();
-                                webClient.DownloadFile(link, destination + "/" + author + "/" + title + "/img_" + countImg + ".jpg");
+                                images.Add(new string[] { link, destination + "/" + author + "/" + title + "/img_" + countImg + ".jpg" });
                                 countImg++;
                             }
                         }
                         else if(regUrl.IsMatch(link))
                         {
-                            if (!urls.Contains(link))
+                            if (regUrl.IsMatch(link))
                             {
-                                if (regUrl.IsMatch(link))
-                                    urls.Add(url + link);
+                                urls.Add(baseUrl + link);
+                            } else if(regHttp.IsMatch(link))
+                            {
+                                urls.Add(link);
+                            } else
+                            {
+                                urls.Add(url + link);
                             }
                         }
                     }
                 }
                 m = m.NextMatch();
             }
-            urls.Sort();
 
-            // Parse all link
-            urls.ForEach(delegate (String link)
+            // Save image
+            Console.WriteLine("\tSaving images " + images.Count);
+            countImg = 1;
+            images.ForEach(delegate (String[] img)
             {
-                //ParseSite(link);
+                Console.WriteLine("\t\t"+ countImg  + "/" + images.Count);
+                try
+                {
+                    WebClient webClient = new WebClient();
+                    webClient.DownloadFile(img[0], img[1]);
+                }catch(Exception e)
+                {
+                    Console.WriteLine("\t\tError " + img[1] + " : " + e.Message);
+                }
+                countImg++;
             });
 
-            return urls;
+            // Parse all link
+            urls.Sort();
+            urls.ForEach(delegate (String link)
+            {
+                ParseSite(link, destination);
+            });
         }
 
     }
